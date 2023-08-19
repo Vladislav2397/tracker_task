@@ -1,0 +1,7 @@
+{
+  "name": "TrackerTask",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "vue-vite"
+}
