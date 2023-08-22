@@ -1,46 +1,42 @@
 <template>
     <ion-page>
-        <ion-header mode="md">
-            <ion-toolbar>
-                <ion-title>Tracker.Task </ion-title>
-                <ion-buttons slot="end">
-                    <ion-button @click="refresh" color="primary"
-                        >REFRESH</ion-button
-                    >
-                </ion-buttons>
-            </ion-toolbar>
-        </ion-header>
+        <header-component>
+            <ion-button @click="refresh" color="primary">REFRESH</ion-button>
+        </header-component>
         <ion-content>
             <div class="container">
                 <ion-input placeholder="Input task title" v-model="value" />
                 <ion-button
                     mode="md"
                     class="create-task-button"
-                    @click="addTask"
-                >
+                    @click="addTask">
                     Create task
                 </ion-button>
             </div>
             <ion-list class="list">
-                <ion-list-header>Uncompleted</ion-list-header>
+                <ion-list-header mode="md">
+                    <ion-title>Uncompleted</ion-title>
+                </ion-list-header>
                 <template v-if="isLoading">
                     <ion-item>
                         <ion-label>Loading...</ion-label>
                     </ion-item>
                 </template>
                 <template v-else>
-                    <ion-item v-for="item in uncomletedTasks" :key="item.id">
+                    <ion-item v-for="item in uncompletedTasks" :key="item.id">
                         <ion-label class="ion-text-wrap">{{
                             item.name
                         }}</ion-label>
-                        <div class="complete" @click="completeTask(item)"></div>
+                        <div class="complete" @click="toggleTask(item)"></div>
                         <div class="remove" @click="removeTask(item)"></div>
                     </ion-item>
                 </template>
             </ion-list>
 
             <ion-list class="list">
-                <ion-list-header>Completed</ion-list-header>
+                <ion-list-header mode="md">
+                    <ion-title>Completed</ion-title>
+                </ion-list-header>
                 <template v-if="isLoading">
                     <ion-item>
                         <ion-label>Loading...</ion-label>
@@ -50,15 +46,11 @@
                     <ion-item
                         class="completed-list"
                         v-for="item in comletedTasks"
-                        :key="item.id"
-                    >
+                        :key="item.id">
                         <ion-label class="ion-text-wrap">{{
                             item.name
                         }}</ion-label>
-                        <div
-                            class="complete"
-                            @click="uncompleteTask(item)"
-                        ></div>
+                        <div class="complete" @click="toggleTask(item)"></div>
                         <div class="remove" @click="removeTask(item)"></div>
                     </ion-item>
                 </template>
@@ -68,149 +60,32 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from "vue";
+import { Header as HeaderComponent } from '@/widgets/Header'
 import {
     IonContent,
-    IonHeader,
     IonPage,
     IonTitle,
     IonListHeader,
-    IonToolbar,
     IonInput,
     IonButton,
     IonItem,
     IonList,
     IonLabel,
-} from "@ionic/vue";
-import * as taskApi from "@/shared/api/task";
+} from '@ionic/vue'
+import { taskModel } from '@/features/task'
 
-type UncompletedTask = {
-    id: taskApi.UUID;
-    name: string;
-    isCompleted: false;
-};
-
-type CompletedTask = {
-    id: taskApi.UUID;
-    name: string;
-    isCompleted: true;
-};
-
-function isTaskCompleted(task: Task): task is CompletedTask {
-    return task.isCompleted;
-}
-function isTaskUncompleted(task: Task): task is UncompletedTask {
-    return !task.isCompleted;
-}
-
-type Task = UncompletedTask | CompletedTask;
-
-const value = ref("");
-
-const list = ref<Task[]>([
-    //
-]);
-
-const isLoading = ref(false);
-
-async function refresh() {
-    isLoading.value = true;
-    try {
-        const { tasks } = await taskApi.getTasks();
-
-        list.value = tasks.map((item) => ({
-            id: item.id,
-            name: item.name,
-            isCompleted: item.is_completed,
-        }));
-    } catch (error) {
-        console.error("update tasks is failed");
-    } finally {
-        isLoading.value = false;
-    }
-}
-
-onMounted(() => {
-    refresh();
-});
-
-const comletedTasks = computed<CompletedTask[]>(() =>
-    list.value.filter(isTaskCompleted)
-);
-const uncomletedTasks = computed<UncompletedTask[]>(() =>
-    list.value.filter(isTaskUncompleted)
-);
-
-let nextId = 1;
-
-async function addTask() {
-    if (!value.value.trim()) return;
-
-    const response = await taskApi.createTask({
-        name: value.value.trim(),
-    });
-
-    if (!response.status) return;
-
-    list.value.push({
-        id: `${nextId++}`,
-        name: value.value.trim(),
-        isCompleted: false,
-    });
-
-    clear();
-}
-
-function clear() {
-    value.value = "";
-}
-
-async function removeTask(task: any) {
-    const response = await taskApi.removeTask({ id: task.id });
-
-    if (!response.status) return;
-
-    list.value = list.value.filter((item) => item.id !== task.id);
-}
-
-async function completeTask(task: UncompletedTask) {
-    const updatedTask: CompletedTask = { ...task, isCompleted: true };
-
-    const response = await taskApi.updateTask(updatedTask);
-
-    if (!response.status) return;
-
-    list.value = list.value.map((item) =>
-        item.id === task.id ? updatedTask : item
-    );
-}
-
-async function uncompleteTask(task: CompletedTask) {
-    const updatedTask: UncompletedTask = { ...task, isCompleted: false };
-
-    const response = await taskApi.updateTask(updatedTask);
-
-    if (!response.status) return;
-
-    list.value = list.value.map((item) =>
-        item.id === task.id ? updatedTask : item
-    );
-}
+const {
+    addTask,
+    comletedTasks,
+    uncompletedTasks,
+    removeTask,
+    toggleTask,
+    isLoading,
+    refresh,
+} = taskModel.useTasks()
 </script>
 
 <style scoped>
-.app-header {
-    position: sticky;
-    color: #000;
-    font-size: 36px;
-    line-height: 44px;
-}
-
-.app-header span {
-    color: #f00;
-    font-weight: bold;
-}
-
 .container {
     margin-top: var(--ion-safe-area-top);
     padding: 0 16px;
