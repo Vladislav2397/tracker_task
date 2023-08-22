@@ -3,6 +3,9 @@
     <ion-header :translucent="true">
       <ion-toolbar>
         <ion-title>Tracker.Task</ion-title>
+        <ion-buttons slot="end">
+          <ion-button @click="refresh">Refresh</ion-button>
+        </ion-buttons>
       </ion-toolbar>
     </ion-header>
 
@@ -15,43 +18,57 @@
 
       <div class="container">
         <ion-input placeholder="Input task title" v-model="value" />
-        <ion-button @click="addTask">Create task</ion-button>
+        <ion-button class="create-task-button" @click="addTask">Create task</ion-button>
         <ion-list class="list">
           <ion-title>Uncompleted</ion-title>
-          <ion-item v-for="item in uncomletedTasks" :key="item.id">
-            <ion-label class="ion-text-wrap">{{ item.name }}</ion-label>
-            <div class="complete" @click="completeTask(item)"></div>
-            <div class="remove" @click="removeTask(item)"></div>
-          </ion-item>
+          <template v-if="isLoading">
+            <ion-item>
+              <ion-label>Loading...</ion-label>
+            </ion-item>
+          </template>
+          <template v-else>
+            <ion-item v-for="item in uncomletedTasks" :key="item.id">
+              <ion-label class="ion-text-wrap">{{ item.name }}</ion-label>
+              <div class="complete" @click="completeTask(item)"></div>
+              <div class="remove" @click="removeTask(item)"></div>
+            </ion-item>
+          </template>
         </ion-list>
 
         <ion-list class="list">
           <ion-title>Completed</ion-title>
-          <ion-item class="completed-list" v-for="item in comletedTasks" :key="item.id">
-            <ion-label class="ion-text-wrap">{{ item.name }}</ion-label>
-            <div class="complete" @click="uncompleteTask(item)"></div>
-            <div class="remove" @click="removeTask(item)"></div>
-          </ion-item>
+          <template v-if="isLoading">
+            <ion-item>
+              <ion-label>Loading...</ion-label>
+            </ion-item>
+          </template>
+          <template v-else>
+            <ion-item class="completed-list" v-for="item in comletedTasks" :key="item.id">
+              <ion-label class="ion-text-wrap">{{ item.name }}</ion-label>
+              <div class="complete" @click="uncompleteTask(item)"></div>
+              <div class="remove" @click="removeTask(item)"></div>
+            </ion-item>
+          </template>
         </ion-list>
-        
+
       </div>
     </ion-content>
   </ion-page>
 </template>
 
 <script setup lang="ts">
-import {computed, ref, onMounted} from 'vue'
-import { IonContent, IonHeader, IonPage, IonTitle, IonToolbar, IonInput, IonButton, IonItem, IonList } from '@ionic/vue';
-import {getTasks} from '../shared/api/task'
+import { computed, ref, onMounted } from 'vue'
+import { IonContent, IonHeader, IonPage, IonTitle, IonToolbar, IonInput, IonButton, IonItem, IonList, IonLabel } from '@ionic/vue';
+import * as taskApi from '@/shared/api/task'
 
 type UncompletedTask = {
-  id: number
+  id: taskApi.UUID
   name: string
   isCompleted: false
 }
 
 type CompletedTask = {
-  id: number
+  id: taskApi.UUID
   name: string
   isCompleted: true
 }
@@ -71,14 +88,27 @@ const list = ref<Task[]>([
   //
 ])
 
-onMounted(async () => {
-  const { tasks } = await getTasks()
+const isLoading = ref(false)
 
-  list.value = tasks.map(item => ({
-    id: item.id,
-    name: item.name,
-    isCompleted: item.is_completed
-  }))
+async function refresh() {
+  isLoading.value = true
+  try {
+    const { tasks } = await taskApi.getTasks()
+
+    list.value = tasks.map(item => ({
+      id: item.id,
+      name: item.name,
+      isCompleted: item.is_completed
+    }))
+  } catch (error) {
+    console.error('update tasks is failed')
+  } finally {
+    isLoading.value = false
+  }
+}
+
+onMounted(() => {
+  refresh()
 })
 
 const comletedTasks = computed<CompletedTask[]>(
@@ -90,11 +120,17 @@ const uncomletedTasks = computed<UncompletedTask[]>(
 
 let nextId = 1
 
-function addTask() {
+async function addTask() {
   if (!value.value.trim()) return
 
+  const response = await taskApi.createTask({
+    name: value.value.trim(),
+  })
+
+  if (!response.status) return
+
   list.value.push({
-    id: nextId++,
+    id: `${nextId++}`,
     name: value.value.trim(),
     isCompleted: false,
   })
@@ -106,19 +142,35 @@ function clear() {
   value.value = ''
 }
 
-function removeTask(task: any) {
+async function removeTask(task: any) {
+  const response = await taskApi.removeTask({ id: task.id })
+
+  if (!response.status) return
+
   list.value = list.value.filter(item => item.id !== task.id)
 }
 
-function completeTask(task: UncompletedTask) {
+async function completeTask(task: UncompletedTask) {
+  const updatedTask: CompletedTask = { ...task, isCompleted: true }
+
+  const response = await taskApi.updateTask(updatedTask)
+
+  if (!response.status) return
+
   list.value = list.value.map(
-    item => item.id === task.id ? { ...item, isCompleted: true } : item
+    item => item.id === task.id ? updatedTask : item
   )
 }
 
-function uncompleteTask(task: CompletedTask) {
+async function uncompleteTask(task: CompletedTask) {
+  const updatedTask: UncompletedTask = { ...task, isCompleted: false }
+
+  const response = await taskApi.updateTask(updatedTask)
+
+  if (!response.status) return
+
   list.value = list.value.map(
-    item => item.id === task.id ? { ...item, isCompleted: false } : item
+    item => item.id === task.id ? updatedTask : item
   )
 }
 </script>
@@ -128,7 +180,7 @@ function uncompleteTask(task: CompletedTask) {
   padding: 0 16px;
 }
 
-.button {
+.create-task-button {
   width: auto;
   margin-top: 12px;
 }
