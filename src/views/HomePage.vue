@@ -50,7 +50,13 @@
             </ion-item>
           </template>
         </ion-list>
-
+          <ion-toast
+            :is-open="isOpen"
+            message="Request is failed"
+            :duration="5000"
+            @didDismiss="setOpen(false)"
+          >
+          </ion-toast>
       </div>
     </ion-content>
   </ion-page>
@@ -58,7 +64,7 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
-import { IonContent, IonHeader, IonPage, IonTitle, IonToolbar, IonInput, IonButton, IonItem, IonList, IonLabel } from '@ionic/vue';
+import { IonContent, IonHeader, IonPage, IonTitle, IonToolbar, IonInput, IonButton, IonItem, IonList, IonLabel, IonToast } from '@ionic/vue';
 import * as taskApi from '@/shared/api/task'
 
 type UncompletedTask = {
@@ -82,6 +88,11 @@ function isTaskUncompleted(task: Task): task is UncompletedTask {
 
 type Task = UncompletedTask | CompletedTask
 
+const isOpen = ref(false)
+function setOpen(value: boolean) {
+  isOpen.value = value
+}
+
 const value = ref('')
 
 const list = ref<Task[]>([
@@ -102,6 +113,7 @@ async function refresh() {
     }))
   } catch (error) {
     console.error('update tasks is failed')
+    setOpen(true)
   } finally {
     isLoading.value = false
   }
